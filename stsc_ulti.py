@@ -1,6 +1,8 @@
 import numpy as np
 from itertools import groupby
 from scipy.linalg import eigh, inv, sqrtm
+from scipy.sparse import csr_matrix
+import scipy.sparse
 
 
 def reformat_result(cluster_labels, n):
@@ -11,13 +13,30 @@ def reformat_result(cluster_labels, n):
 
 
 def affinity_to_lap_to_eig(affinity):
-    tril = np.tril(affinity, k=-1)
-    a = tril + tril.T
-    d = np.diag(a.sum(axis=0))
-    dd = inv(sqrtm(d))
-    l = dd.dot(a).dot(dd)
-    w, v = eigh(l)
-    return w, v
+    if not isinstance(affinity, scipy.sparse.csr_matrix):
+        tril = np.tril(affinity, k=-1)
+        a = tril + tril.T
+        d = np.diag(a.sum(axis=0))
+        dd = inv(sqrtm(d))
+        l = dd.dot(a).dot(dd)
+        w, v = eigh(l)
+        return w, v
+
+    else:
+        tril = scipy.sparse.tril(affinity, k=-1)
+        a = tril + tril.T
+        d = scipy.sparse.diags(a.sum(axis=0).A.squeeze())
+        d_sqrt = d.sqrt()
+        dd = scipy.sparse.linalg.inv(d_sqrt)
+
+        # Laplacian?
+        l = dd.dot(a).dot(dd)
+
+        k = 100
+        if k > a.shape[0]:
+            k = a.shape[0]
+        w, v = scipy.sparse.linalg.eigsh(l, k=100)
+        return w, v
 
 
 def get_min_max(w, min_n_cluster, max_n_cluster):
